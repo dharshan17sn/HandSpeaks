@@ -616,12 +616,13 @@ function setupEventListeners() {
 
 // Check if sensor data is valid (only check the 9 features sent to model)
 function isSensorDataValid() {
+    // If BLE is connected, sensor stream is considered active
+    if (bleState.isConnected) return true;
     const allValues = [
         ...appState.sensorData.acceleration,
         ...appState.sensorData.gravity,
         ...appState.sensorData.angularVelocity
     ];
-    // At least some values must be non-zero (allow orientation to lag)
     return allValues.some(v => v !== 0);
 }
 
@@ -635,56 +636,53 @@ function updateHandModel(model) {
 // Start collecting sensor data
 function startDataCollection() {
     setInterval(() => {
-        const statusEl = document.getElementById('prediction-status');
-        const bufferInfo = document.getElementById('buffer-info');
+        try {
+            const statusEl = document.getElementById('prediction-status');
+            const bufferInfo = document.getElementById('buffer-info');
 
-        // Show why we're not collecting in statusEl
-        if (!appState.isCollectingData) {
-            if (statusEl) statusEl.textContent = '⏳ Analyzing motion...';
-            return;
-        }
-        if (!isSensorDataValid()) {
-            if (statusEl) statusEl.textContent = '📡 Waiting for sensor stream...';
-            return;
-        }
+            // Show why we're not collecting in statusEl
+            if (!appState.isCollectingData) {
+                if (statusEl) statusEl.textContent = '⏳ Analyzing motion...';
+                return;
+            }
+            if (!isSensorDataValid()) {
+                if (statusEl) statusEl.textContent = '📡 Waiting for sensor stream...';
+                return;
+            }
 
-        // Animate data packet (safely — guard against missing DOM elements)
-        const dataFlowContainer = document.getElementById('data-flow-container');
-        if (dataFlowContainer) {
-            animateDataPacket(dataFlowContainer);
-            const watchIcon = dataFlowContainer.querySelector('div:nth-child(2) > div:nth-child(1) > div:nth-child(1)');
-            const frontendIcon = dataFlowContainer.querySelector('div:nth-child(2) > div:nth-child(3) > div:nth-child(1)');
-            if (watchIcon) watchIcon.style.transform = 'scale(1.1)';
-            if (frontendIcon) frontendIcon.style.transform = 'scale(1.1)';
-            setTimeout(() => {
-                if (watchIcon) watchIcon.style.transform = 'scale(1)';
-                if (frontendIcon) frontendIcon.style.transform = 'scale(1)';
-            }, 200);
-        }
+            // Animate data packet safely
+            const dataFlowContainer = document.getElementById('data-flow-container');
+            if (dataFlowContainer) {
+                animateDataPacket(dataFlowContainer);
+            }
 
-        if (appState.sensorDataBuffer.length === 0) {
-            appState.startTime = Date.now();
-        }
+            if (appState.sensorDataBuffer.length === 0) {
+                appState.startTime = Date.now();
+            }
 
-        // Store sensor data
-        appState.sensorDataBuffer.push([
-            ...appState.sensorData.acceleration,
-            ...appState.sensorData.gravity,
-            ...appState.sensorData.angularVelocity,
-            ...appState.sensorData.orientation.slice(0, 3)
-        ]);
+            // Store sensor data
+            appState.sensorDataBuffer.push([
+                ...appState.sensorData.acceleration,
+                ...appState.sensorData.gravity,
+                ...appState.sensorData.angularVelocity,
+                ...appState.sensorData.orientation.slice(0, 3)
+            ]);
 
-        const count = appState.sensorDataBuffer.length;
-        if (statusEl) {
-            statusEl.textContent = `🔄 Recording: ${count}/${CONFIG.sequenceLength}`;
-        }
-        if (bufferInfo) {
-            bufferInfo.textContent = `Buffer: ${count}/${CONFIG.sequenceLength}`;
-        }
+            const count = appState.sensorDataBuffer.length;
+            if (statusEl) {
+                statusEl.textContent = `🔄 Recording: ${count}/${CONFIG.sequenceLength}`;
+            }
+            if (bufferInfo) {
+                bufferInfo.textContent = `Buffer: ${count}/${CONFIG.sequenceLength}`;
+            }
 
-        if (count >= CONFIG.sequenceLength) {
-            if (statusEl) statusEl.textContent = '📤 Recognizing gesture...';
-            processDataBuffer();
+            if (count >= CONFIG.sequenceLength) {
+                if (statusEl) statusEl.textContent = '📤 Recognizing gesture...';
+                console.log(`[DATA] Buffer reached ${CONFIG.sequenceLength} frames, sending to /predict...`);
+                processDataBuffer();
+            }
+        } catch (err) {
+            console.error('Error in data collection tick:', err);
         }
     }, 20);
 }
@@ -729,6 +727,7 @@ async function sendDataToFlask(dataToSend) {
     const predEl = document.getElementById('prediction');
     const statusEl = document.getElementById('prediction-status');
     try {
+        console.log(`[API] 📤 Sending ${dataToSend.length / 9} frames to ${CONFIG.apiEndpoint}/predict`);
         const response = await fetch(`${CONFIG.apiEndpoint}/predict`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -737,6 +736,7 @@ async function sendDataToFlask(dataToSend) {
 
         // Handle Render cold-start (404/502/503) — retry
         if (response.status === 404 || response.status === 502 || response.status === 503) {
+            console.warn('[API] Server returned status', response.status, 'Retrying in 3s...');
             if (statusEl) statusEl.textContent = '🌐 Waking up server, retrying...';
             setTimeout(() => {
                 appState.isCollectingData = true;
@@ -745,6 +745,8 @@ async function sendDataToFlask(dataToSend) {
         }
 
         const data = await response.json();
+        console.log('[API] 📥 Response from model:', data);
+
         if (!response.ok) {
             const errMsg = data.error || `Server error ${response.status}`;
             console.error('Predict error:', data);
@@ -755,7 +757,7 @@ async function sendDataToFlask(dataToSend) {
             handlePrediction(data.prediction, data.confidence || 1);
         }
     } catch (error) {
-        console.error('Prediction fetch error:', error);
+        console.error('[API] Prediction fetch error:', error);
         if (statusEl) statusEl.textContent = '⚠️ Network error';
     }
 }
@@ -766,6 +768,8 @@ function handlePrediction(prediction, confidence) {
 
     // Normalize label name for comparison (trim whitespace)
     const label = String(prediction).trim();
+    console.log(`[GESTURE] 🎯 Recognized: "${label}" (Confidence: ${Math.round((confidence || 1) * 100)}%)`);
+
     const predEl = document.getElementById('prediction');
     const statusEl = document.getElementById('prediction-status');
 
@@ -1045,22 +1049,26 @@ function animateStatusBadge(state) {
 }
 
 function animatePacket(container) {
-    // Remove any existing packet
-    const oldPacket = container.querySelector('.ble-packet');
-    if (oldPacket) oldPacket.remove();
-    // Create a new packet
-    const packet = document.createElement('div');
-    packet.className = 'ble-packet';
-    container.appendChild(packet);
-    // Animate packet from left to right
-    setTimeout(() => {
-        packet.style.left = 'calc(100% - 80px)';
-        packet.style.opacity = '0.7';
-        packet.style.boxShadow = '0 0 24px 8px #007AFF44';
-    }, 10);
-    setTimeout(() => {
-        packet.remove();
-    }, 1200);
+    if (!container) return;
+    try {
+        const oldPacket = container.querySelector('.ble-packet');
+        if (oldPacket) oldPacket.remove();
+        const packet = document.createElement('div');
+        packet.className = 'ble-packet';
+        container.appendChild(packet);
+        setTimeout(() => {
+            if (packet) {
+                packet.style.left = 'calc(100% - 80px)';
+                packet.style.opacity = '0.7';
+                packet.style.boxShadow = '0 0 24px 8px #007AFF44';
+            }
+        }, 10);
+        setTimeout(() => {
+            if (packet && packet.parentNode) packet.remove();
+        }, 1200);
+    } catch (e) {
+        // Safe fail
+    }
 }
 
 function animateSignalBars(strength) {
@@ -1163,21 +1171,27 @@ function updateSignalStrength(rssi) {
 
 // --- Enhanced data packet animation ---
 function animateDataPacket(container) {
-    animatePacket(container.querySelector('.ble-connection-line'));
-    // Update metrics with enhanced calculations
-    bleState.packetCount++;
-    const now = Date.now();
-    if (bleState.lastPacketTime) {
-        const timeDiff = now - bleState.lastPacketTime;
-        bleState.dataRate = Math.round((1000 / timeDiff) * 12);
-        bleState.latency = Math.round(timeDiff);
-        bleState.packetLoss = Math.round(Math.random() * 2); // Simulated packet loss
+    if (!container) return;
+    try {
+        const line = container.querySelector('.ble-connection-line');
+        if (line) animatePacket(line);
+        // Update metrics with enhanced calculations
+        bleState.packetCount++;
+        const now = Date.now();
+        if (bleState.lastPacketTime) {
+            const timeDiff = now - bleState.lastPacketTime;
+            bleState.dataRate = Math.round((1000 / timeDiff) * 12);
+            bleState.latency = Math.round(timeDiff);
+            bleState.packetLoss = Math.round(Math.random() * 2); // Simulated packet loss
+        }
+        bleState.lastPacketTime = now;
+        animateMetric('packet-count', bleState.packetCount, 'pkts');
+        animateMetric('data-rate', bleState.dataRate, 'B/s');
+        animateMetric('latency', bleState.latency, 'ms');
+        animateMetric('packet-loss', bleState.packetLoss, '%');
+    } catch (err) {
+        // Safe fail
     }
-    bleState.lastPacketTime = now;
-    animateMetric('packet-count', bleState.packetCount, 'pkts');
-    animateMetric('data-rate', bleState.dataRate, 'B/s');
-    animateMetric('latency', bleState.latency, 'ms');
-    animateMetric('packet-loss', bleState.packetLoss, '%');
 }
 
 // --- Update createDataFlowVisualization for new visuals ---
