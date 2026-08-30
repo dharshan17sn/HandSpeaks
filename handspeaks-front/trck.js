@@ -365,11 +365,24 @@ function setupUI() {
     const predictionDisplay = document.createElement('div');
     predictionDisplay.id = 'prediction';
     predictionDisplay.style.color = CONFIG.colors.primary;
-    predictionDisplay.style.fontSize = CONFIG.typography.headline;
-    predictionDisplay.style.fontWeight = '600';
+    predictionDisplay.style.fontSize = CONFIG.typography.title1;
+    predictionDisplay.style.fontWeight = '700';
     predictionDisplay.style.textAlign = 'center';
+    predictionDisplay.style.minHeight = '36px';
+    predictionDisplay.style.display = 'flex';
+    predictionDisplay.style.alignItems = 'center';
+    predictionDisplay.style.justifyContent = 'center';
     predictionDisplay.textContent = 'Waiting for gesture...';
     predictionCard.appendChild(predictionDisplay);
+
+    const predictionStatus = document.createElement('div');
+    predictionStatus.id = 'prediction-status';
+    predictionStatus.style.color = CONFIG.colors.secondaryText;
+    predictionStatus.style.fontSize = CONFIG.typography.caption1;
+    predictionStatus.style.textAlign = 'center';
+    predictionStatus.style.marginTop = '6px';
+    predictionStatus.textContent = 'Connect watch to begin';
+    predictionCard.appendChild(predictionStatus);
     
     rightPanel.appendChild(predictionCard);
 
@@ -622,17 +635,16 @@ function updateHandModel(model) {
 // Start collecting sensor data
 function startDataCollection() {
     setInterval(() => {
-        const predEl = document.getElementById('prediction');
+        const statusEl = document.getElementById('prediction-status');
+        const bufferInfo = document.getElementById('buffer-info');
 
-        // Show why we're not collecting
+        // Show why we're not collecting in statusEl
         if (!appState.isCollectingData) {
-            if (predEl && predEl.textContent === 'Waiting for gesture...') {
-                predEl.textContent = '⏳ Processing...';
-            }
+            if (statusEl) statusEl.textContent = '⏳ Analyzing motion...';
             return;
         }
         if (!isSensorDataValid()) {
-            if (predEl) predEl.textContent = '📡 Waiting for sensor data...';
+            if (statusEl) statusEl.textContent = '📡 Waiting for sensor stream...';
             return;
         }
 
@@ -662,13 +674,16 @@ function startDataCollection() {
             ...appState.sensorData.orientation.slice(0, 3)
         ]);
 
-        // Show live buffer progress
-        if (predEl) {
-            predEl.textContent = `🔄 Collecting ${appState.sensorDataBuffer.length}/${CONFIG.sequenceLength}`;
+        const count = appState.sensorDataBuffer.length;
+        if (statusEl) {
+            statusEl.textContent = `🔄 Recording: ${count}/${CONFIG.sequenceLength}`;
+        }
+        if (bufferInfo) {
+            bufferInfo.textContent = `Buffer: ${count}/${CONFIG.sequenceLength}`;
         }
 
-        if (appState.sensorDataBuffer.length >= CONFIG.sequenceLength) {
-            if (predEl) predEl.textContent = '📤 Sending to server...';
+        if (count >= CONFIG.sequenceLength) {
+            if (statusEl) statusEl.textContent = '📤 Recognizing gesture...';
             processDataBuffer();
         }
     }, 20);
@@ -678,7 +693,8 @@ function startDataCollection() {
 function processDataBuffer() {
     appState.isCollectingData = false;
     const timeTaken = (Date.now() - appState.startTime) / 1000;
-    document.getElementById('timeTaken').textContent = `${timeTaken.toFixed(2)}s`;
+    const timeEl = document.getElementById('timeTaken');
+    if (timeEl) timeEl.textContent = `${timeTaken.toFixed(2)}s`;
     
     // Only send acceleration, gravity, and angular velocity (9 values per frame)
     const dataToSend = appState.sensorDataBuffer.slice(0, CONFIG.sequenceLength).map(frame => {
@@ -691,32 +707,27 @@ function processDataBuffer() {
     
     sendDataToFlask(dataToSend.flat());
     appState.sensorDataBuffer = [];
-    setTimeout(() => { appState.isCollectingData = true; }, 1000);
+    setTimeout(() => { appState.isCollectingData = true; }, 800);
 }
 
 // Wake up the Render server (free tier sleeps after inactivity)
 async function wakeServer() {
-    const predEl = document.getElementById('prediction');
+    const statusEl = document.getElementById('prediction-status');
     try {
-        if (predEl) predEl.textContent = '🌐 Waking up server...';
+        if (statusEl) statusEl.textContent = '🌐 Connecting to AI server...';
         const res = await fetch(`${CONFIG.apiEndpoint}/health`, { method: 'GET' });
         if (res.ok || res.status === 404) {
-            // 404 on / is fine — Flask has no root route but server is up
-            if (predEl) predEl.textContent = '✅ Server ready!';
-            setTimeout(() => {
-                if (predEl && predEl.textContent === '✅ Server ready!') {
-                    predEl.textContent = 'Waiting for gesture...';
-                }
-            }, 2000);
+            if (statusEl) statusEl.textContent = '✅ AI Engine ready';
         }
     } catch (e) {
-        if (predEl) predEl.textContent = '⚠️ Server unreachable';
+        if (statusEl) statusEl.textContent = '⚠️ Server connection error';
     }
 }
 
 // Send data to Flask backend for prediction
 async function sendDataToFlask(dataToSend) {
     const predEl = document.getElementById('prediction');
+    const statusEl = document.getElementById('prediction-status');
     try {
         const response = await fetch(`${CONFIG.apiEndpoint}/predict`, {
             method: 'POST',
@@ -724,12 +735,12 @@ async function sendDataToFlask(dataToSend) {
             body: JSON.stringify({ sensor_data: dataToSend })
         });
 
-        // Handle Render cold-start (404/502/503) — retry once after 5s
+        // Handle Render cold-start (404/502/503) — retry
         if (response.status === 404 || response.status === 502 || response.status === 503) {
-            if (predEl) predEl.textContent = '🌐 Waking up server, retrying...';
+            if (statusEl) statusEl.textContent = '🌐 Waking up server, retrying...';
             setTimeout(() => {
-                appState.isCollectingData = true; // allow re-collection
-            }, 5000);
+                appState.isCollectingData = true;
+            }, 3000);
             return;
         }
 
@@ -737,7 +748,7 @@ async function sendDataToFlask(dataToSend) {
         if (!response.ok) {
             const errMsg = data.error || `Server error ${response.status}`;
             console.error('Predict error:', data);
-            if (predEl) predEl.textContent = `⚠️ ${errMsg}`;
+            if (statusEl) statusEl.textContent = `⚠️ ${errMsg}`;
             return;
         }
         if (data.prediction) {
@@ -745,7 +756,7 @@ async function sendDataToFlask(dataToSend) {
         }
     } catch (error) {
         console.error('Prediction fetch error:', error);
-        if (predEl) predEl.textContent = '⚠️ Cannot reach server';
+        if (statusEl) statusEl.textContent = '⚠️ Network error';
     }
 }
 
@@ -755,14 +766,34 @@ function handlePrediction(prediction, confidence) {
 
     // Normalize label name for comparison (trim whitespace)
     const label = String(prediction).trim();
-    document.getElementById('prediction').textContent = label;
+    const predEl = document.getElementById('prediction');
+    const statusEl = document.getElementById('prediction-status');
 
-    if (label === 'No gesture') {
-        appState.inactivityTimer = setTimeout(finalizeSentence, CONFIG.inactivityTimeout);
+    if (predEl) {
+        predEl.textContent = label;
+        predEl.style.transform = 'scale(1.08)';
+        setTimeout(() => { if (predEl) predEl.style.transform = 'scale(1)'; }, 200);
+    }
+
+    const confPct = Math.round((confidence || 1) * 100);
+    if (statusEl) {
+        statusEl.textContent = `Confidence: ${confPct}%`;
+    }
+
+    if (label.toLowerCase() === 'no gesture') {
+        if (appState.currentSentence.length > 0) {
+            appState.inactivityTimer = setTimeout(finalizeSentence, CONFIG.inactivityTimeout);
+        }
     } else {
-        appState.currentSentence.push(label);
-        updateSentenceDisplay();
-        speak(label);
+        // Prevent duplicate consecutive gestures in rapid succession
+        const lastWord = appState.currentSentence[appState.currentSentence.length - 1];
+        if (lastWord !== label) {
+            appState.currentSentence.push(label);
+            updateSentenceDisplay();
+            speak(label);
+        }
+        // Restart timer to finalize sentence when user pauses
+        appState.inactivityTimer = setTimeout(finalizeSentence, CONFIG.inactivityTimeout);
     }
 }
 
