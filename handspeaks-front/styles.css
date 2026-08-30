@@ -780,6 +780,11 @@ body {
     /* Adjust depending on your header size */
 }
 
+/* Hero page: header is transparent/overlay — no top padding needed */
+body#index-page {
+    padding-top: 0 !important;
+}
+
 /* Team Section Styling */
 .team-container {
     display: flex;
