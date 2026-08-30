@@ -170,6 +170,11 @@ class GeminiEnhancer:
 # Initialize the enhancer
 text_enhancer = GeminiEnhancer()
 
+@app.route('/health', methods=['GET'])
+def health():
+    """Health check endpoint to wake up Render free-tier server"""
+    return jsonify({"status": "ok", "model_loaded": model is not None})
+
 @app.route('/predict', methods=['POST'])
 def predict():
     """Endpoint for gesture prediction (using only 9 features per frame)"""

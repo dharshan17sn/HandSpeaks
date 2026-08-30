@@ -694,8 +694,29 @@ function processDataBuffer() {
     setTimeout(() => { appState.isCollectingData = true; }, 1000);
 }
 
+// Wake up the Render server (free tier sleeps after inactivity)
+async function wakeServer() {
+    const predEl = document.getElementById('prediction');
+    try {
+        if (predEl) predEl.textContent = '🌐 Waking up server...';
+        const res = await fetch(`${CONFIG.apiEndpoint}/health`, { method: 'GET' });
+        if (res.ok || res.status === 404) {
+            // 404 on / is fine — Flask has no root route but server is up
+            if (predEl) predEl.textContent = '✅ Server ready!';
+            setTimeout(() => {
+                if (predEl && predEl.textContent === '✅ Server ready!') {
+                    predEl.textContent = 'Waiting for gesture...';
+                }
+            }, 2000);
+        }
+    } catch (e) {
+        if (predEl) predEl.textContent = '⚠️ Server unreachable';
+    }
+}
+
 // Send data to Flask backend for prediction
 async function sendDataToFlask(dataToSend) {
+    const predEl = document.getElementById('prediction');
     try {
         const response = await fetch(`${CONFIG.apiEndpoint}/predict`, {
             method: 'POST',
@@ -703,12 +724,20 @@ async function sendDataToFlask(dataToSend) {
             body: JSON.stringify({ sensor_data: dataToSend })
         });
 
+        // Handle Render cold-start (404/502/503) — retry once after 5s
+        if (response.status === 404 || response.status === 502 || response.status === 503) {
+            if (predEl) predEl.textContent = '🌐 Waking up server, retrying...';
+            setTimeout(() => {
+                appState.isCollectingData = true; // allow re-collection
+            }, 5000);
+            return;
+        }
+
         const data = await response.json();
         if (!response.ok) {
-            // Show server error details so we can debug
             const errMsg = data.error || `Server error ${response.status}`;
             console.error('Predict error:', data);
-            document.getElementById('prediction').textContent = `⚠️ ${errMsg}`;
+            if (predEl) predEl.textContent = `⚠️ ${errMsg}`;
             return;
         }
         if (data.prediction) {
@@ -716,7 +745,7 @@ async function sendDataToFlask(dataToSend) {
         }
     } catch (error) {
         console.error('Prediction fetch error:', error);
-        document.getElementById('prediction').textContent = '⚠️ Cannot reach server';
+        if (predEl) predEl.textContent = '⚠️ Cannot reach server';
     }
 }
 
@@ -1049,6 +1078,8 @@ function updateBLEStatus(isConnected, isScanning = false) {
         statusLabel = 'Connected';
         state = 'connected';
         bleState.connectionQuality = 'connected';
+        // Pre-warm the Render server as soon as watch connects
+        wakeServer();
     } else if (isScanning) {
         statusColor = CONFIG.colors.bleScanning;
         statusLabel = 'Scanning...';
