@@ -1,7 +1,24 @@
 [build]
   publish = "handspeaks-front"
 
+# Serve all actual HTML pages directly - no SPA redirect needed
+# The wildcard redirect was breaking JS/CSS/asset loading
 [[redirects]]
-  from = "/*"
-  to = "/index.html"
+  from = "/trck"
+  to = "/trck.html"
+  status = 200
+
+[[redirects]]
+  from = "/training"
+  to = "/training.html"
+  status = 200
+
+[[redirects]]
+  from = "/tutorials"
+  to = "/tutorials.html"
+  status = 200
+
+[[redirects]]
+  from = "/team"
+  to = "/team.html"
   status = 200
