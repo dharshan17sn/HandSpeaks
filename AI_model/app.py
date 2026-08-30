@@ -34,8 +34,15 @@ LABELS_PATH = os.path.join(BASE_DIR, 'unique_labels.npy')
 SENSOR_CSV_PATH = os.path.join(BASE_DIR, 'sensor.csv')
 
 # Load the pre-trained gesture model (trained on 9 features per frame)
-model = load_model(MODEL_PATH)
-unique_labels = np.load(LABELS_PATH, allow_pickle=True)
+try:
+    model = load_model(MODEL_PATH)
+    unique_labels = np.load(LABELS_PATH, allow_pickle=True)
+    print(f'[INFO] Model loaded from {MODEL_PATH}')
+    print(f'[INFO] Labels: {unique_labels}')
+except Exception as e:
+    print(f'[ERROR] Failed to load model: {e}')
+    model = None
+    unique_labels = []
 
 # Constants
 SEQUENCE_LENGTH = 100  # Length of sequences for prediction
@@ -440,4 +447,5 @@ def train_model():
         return jsonify({'status': 'error', 'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
