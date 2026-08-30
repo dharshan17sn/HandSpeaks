@@ -38,6 +38,7 @@ const appState = {
 
 // Initialize the application
 function initializeApp() {
+    document.body.classList.add('training-page');
     setupUI();
     setupThreeJS();
     setupEventListeners();
@@ -63,10 +64,71 @@ function setupUI() {
     connectButton.style.marginLeft = 'auto';
     connectButton.style.marginRight = '20px';
 
-    // Insert connect button into header
+    // Create custom disconnect button
+    const disconnectButton = document.createElement('button');
+    disconnectButton.id = 'custom-disconnect-button';
+    disconnectButton.textContent = 'Disconnect';
+    disconnectButton.style.backgroundColor = '#FF3B30'; // Apple Red
+    disconnectButton.style.color = 'white';
+    disconnectButton.style.border = 'none';
+    disconnectButton.style.borderRadius = '8px';
+    disconnectButton.style.padding = '8px 16px';
+    disconnectButton.style.fontSize = '14px';
+    disconnectButton.style.fontWeight = '500';
+    disconnectButton.style.cursor = 'pointer';
+    disconnectButton.style.transition = 'background-color 0.3s ease';
+    disconnectButton.style.marginLeft = 'auto';
+    disconnectButton.style.marginRight = '20px';
+    disconnectButton.style.display = 'none'; // Hidden by default
+    
+    disconnectButton.addEventListener('mouseover', () => {
+        disconnectButton.style.backgroundColor = '#FF453A';
+    });
+    disconnectButton.addEventListener('mouseout', () => {
+        disconnectButton.style.backgroundColor = '#FF3B30';
+    });
+    
+    disconnectButton.addEventListener('click', () => {
+        try {
+            if (typeof watch.disconnect === 'function') {
+                watch.disconnect();
+            } else if (watch.device && watch.device.gatt && watch.device.gatt.connected) {
+                watch.device.gatt.disconnect();
+            }
+        } catch (e) {
+            console.error('Disconnect failed:', e);
+        }
+    });
+
+    // Insert connect and disconnect buttons into header
     const header = document.querySelector('header');
     if (header) {
+        header.insertBefore(disconnectButton, header.querySelector('.search-container'));
         header.insertBefore(connectButton, header.querySelector('.search-container'));
+        
+        // Create menu toggle for mobile layout
+        const menuToggle = document.createElement('div');
+        menuToggle.className = 'menu-toggle';
+        menuToggle.innerHTML = '☰'; // standard hamburger character
+        menuToggle.style.color = CONFIG.colors.text;
+        menuToggle.style.fontSize = '24px';
+        menuToggle.style.cursor = 'pointer';
+        
+        // Insert hamburger menu toggle button into header
+        header.appendChild(menuToggle);
+        
+        const navigation = document.querySelector('.navigation');
+        menuToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            navigation.classList.toggle('active');
+        });
+        
+        // Close menu when clicking outside
+        document.addEventListener('click', () => {
+            if (navigation && navigation.classList.contains('active')) {
+                navigation.classList.remove('active');
+            }
+        });
     }
 
     // Add button event listeners
@@ -78,29 +140,22 @@ function setupUI() {
         connectButton.style.backgroundColor = CONFIG.colors.primary;
     });
 
-    watch.addEventListener('connected', () => {
-        connectButton.textContent = 'Connected';
-        connectButton.style.backgroundColor = CONFIG.colors.secondary;
-        connectButton.addEventListener('mouseover', () => {
-            connectButton.style.backgroundColor = '#0066CC';
-        });
-    });
-
-    watch.addEventListener('disconnected', () => {
-        connectButton.textContent = 'Connect';
-        connectButton.style.backgroundColor = CONFIG.colors.primary;
-        connectButton.addEventListener('mouseover', () => {
-            connectButton.style.backgroundColor = '#0066CC';
-        });
-    });
-
-    watch.addEventListener('scanning', () => {
-        connectButton.textContent = 'Scanning...';
-        connectButton.style.backgroundColor = CONFIG.colors.primary;
-        connectButton.addEventListener('mouseover', () => {
-            connectButton.style.backgroundColor = '#0066CC';
-        });
-    });
+    // Poll connection state to sync UI dynamically
+    let wasConnected = false;
+    setInterval(() => {
+        const isConnected = (watch.device && watch.device.gatt && watch.device.gatt.connected) || watch.connected || false;
+        if (isConnected !== wasConnected) {
+            wasConnected = isConnected;
+            if (isConnected) {
+                disconnectButton.style.display = 'block';
+                connectButton.style.display = 'none';
+            } else {
+                disconnectButton.style.display = 'none';
+                connectButton.style.display = 'block';
+                connectButton.textContent = 'Connect';
+            }
+        }
+    }, 500);
 
     // Add class label input if container exists
     const idInputContainer = document.querySelector('.id-input');
@@ -361,7 +416,7 @@ async function saveRecordedData() {
     showOperationStatus('Saving data...', false, true);
 
     try {
-        const response = await fetch('http://localhost:5000/save_csv', {
+        const response = await fetch(`${(typeof BACKEND_URL !== 'undefined') ? BACKEND_URL : 'http://localhost:5000'}/save_csv`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -399,7 +454,7 @@ async function deleteRows(type, value) {
     showOperationStatus('Deleting rows...', false, true);
 
     try {
-        const response = await fetch('http://localhost:5000/delete_rows', {
+        const response = await fetch(`${(typeof BACKEND_URL !== 'undefined') ? BACKEND_URL : 'http://localhost:5000'}/delete_rows`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -627,7 +682,7 @@ if (trainButton) {
         const batchSize = parseInt(document.getElementById('batch-size')?.value) || 32;
 
         try {
-            const response = await fetch('http://localhost:5000/train-model', {
+            const response = await fetch(`${(typeof BACKEND_URL !== 'undefined') ? BACKEND_URL : 'http://localhost:5000'}/train-model`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

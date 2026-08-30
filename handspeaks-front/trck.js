@@ -9,7 +9,7 @@ const CONFIG = {
     sequenceLength: 100,
     inactivityTimeout: 3000,
     modelPath: '../3dmodel/arm.glb',
-    apiEndpoint: 'http://127.0.0.1:5000',
+    apiEndpoint: (typeof BACKEND_URL !== 'undefined') ? BACKEND_URL : 'http://127.0.0.1:5000',
     colors: {
         primary: '#007AFF',       // Apple Blue
         primaryDark: '#0066CC',   // Darker Blue for pressed states
@@ -133,6 +133,7 @@ function applyPressAnimation(element, darkColor) {
 
 // Initialize the application
 function initializeApp() {
+    document.body.classList.add('tracking-page');
     setupUI();
     setupThreeJS();
     setupEventListeners();
@@ -157,7 +158,7 @@ function setupUI() {
     mainContent.style.flex = '1';
     mainContent.style.width = '100%';
     mainContent.style.padding = '0';
-    mainContent.style.marginTop = '70px'; // Account for fixed header
+    mainContent.style.marginTop = '0px'; // Already accounted for by content-wrapper
 
     // Move connect button to header
     const connectButton = watch.createConnectButton();
@@ -176,9 +177,73 @@ function setupUI() {
     connectButton.style.marginLeft = 'auto'; // Push to the right
     connectButton.style.marginRight = '20px'; // Add some spacing from the right edge
     
-    // Insert connect button into header
+    // Create custom disconnect button
+    const disconnectButton = document.createElement('button');
+    disconnectButton.id = 'custom-disconnect-button';
+    disconnectButton.textContent = 'Disconnect';
+    disconnectButton.style.backgroundColor = CONFIG.colors.accent; // Apple Red
+    disconnectButton.style.color = 'white';
+    disconnectButton.style.border = 'none';
+    disconnectButton.style.borderRadius = CONFIG.cornerRadius.medium;
+    disconnectButton.style.padding = `${CONFIG.spacing.small} ${CONFIG.spacing.medium}`;
+    disconnectButton.style.fontSize = CONFIG.typography.subhead;
+    disconnectButton.style.fontWeight = '500';
+    disconnectButton.style.cursor = 'pointer';
+    disconnectButton.style.transition = 'background-color 0.3s ease, transform 0.3s ease';
+    disconnectButton.style.boxShadow = 'none';
+    disconnectButton.style.webkitAppearance = 'none';
+    disconnectButton.style.fontFamily = 'inherit';
+    disconnectButton.style.marginLeft = 'auto';
+    disconnectButton.style.marginRight = '20px';
+    disconnectButton.style.display = 'none'; // Hidden by default
+    
+    disconnectButton.addEventListener('mouseover', () => {
+        disconnectButton.style.backgroundColor = CONFIG.colors.accentDark;
+    });
+    disconnectButton.addEventListener('mouseout', () => {
+        disconnectButton.style.backgroundColor = CONFIG.colors.accent;
+    });
+    
+    disconnectButton.addEventListener('click', () => {
+        try {
+            if (typeof watch.disconnect === 'function') {
+                watch.disconnect();
+            } else if (watch.device && watch.device.gatt && watch.device.gatt.connected) {
+                watch.device.gatt.disconnect();
+            }
+        } catch (e) {
+            console.error('Disconnect failed:', e);
+        }
+    });
+    
+    // Insert connect and disconnect buttons into header
     const header = document.querySelector('header');
+    header.insertBefore(disconnectButton, header.querySelector('.search-container'));
     header.insertBefore(connectButton, header.querySelector('.search-container'));
+
+    // Create menu toggle for mobile layout
+    const menuToggle = document.createElement('div');
+    menuToggle.className = 'menu-toggle';
+    menuToggle.innerHTML = '☰'; // standard hamburger character
+    menuToggle.style.color = CONFIG.colors.text;
+    menuToggle.style.fontSize = '24px';
+    menuToggle.style.cursor = 'pointer';
+    
+    // Insert hamburger menu toggle button into header
+    header.appendChild(menuToggle);
+    
+    const navigation = document.querySelector('.navigation');
+    menuToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        navigation.classList.toggle('active');
+    });
+    
+    // Close menu when clicking outside
+    document.addEventListener('click', () => {
+        if (navigation && navigation.classList.contains('active')) {
+            navigation.classList.remove('active');
+        }
+    });
 
     // Dashboard container
     const dashboardContainer = document.createElement('div');
@@ -219,6 +284,7 @@ function setupUI() {
     toneMenuContainer.style.flexDirection = 'column';
     toneMenuContainer.style.gap = CONFIG.spacing.small;
     toneMenuContainer.style.marginBottom = CONFIG.spacing.medium;
+    toneMenuContainer.style.flex = 'none';
     
     const toneLabel = document.createElement('div');
     toneLabel.textContent = 'SELECT TONE';
@@ -286,6 +352,7 @@ function setupUI() {
     predictionCard.style.borderRadius = CONFIG.cornerRadius.medium;
     predictionCard.style.padding = CONFIG.spacing.medium;
     predictionCard.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)';
+    predictionCard.style.flex = 'none';
     
     const predictionHeader = document.createElement('div');
     predictionHeader.textContent = 'Current Gesture';
@@ -312,6 +379,7 @@ function setupUI() {
     timeCard.style.borderRadius = CONFIG.cornerRadius.medium;
     timeCard.style.padding = CONFIG.spacing.medium;
     timeCard.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)';
+    timeCard.style.flex = 'none';
     
     const timeHeader = document.createElement('div');
     timeHeader.textContent = 'Processing Time';
@@ -337,16 +405,38 @@ function setupUI() {
     sentenceCard.style.borderRadius = CONFIG.cornerRadius.medium;
     sentenceCard.style.padding = `${CONFIG.spacing.small} ${CONFIG.spacing.medium}`; // Reduced padding
     sentenceCard.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)';
-    sentenceCard.style.maxHeight = '300px'; // Add max height
+    sentenceCard.style.maxHeight = '400px'; // Increased to allow expansion
     sentenceCard.style.overflowY = 'auto'; // Add scrolling if needed
+    sentenceCard.style.flex = 'none';
     
     const sentenceHeader = document.createElement('div');
-    sentenceHeader.textContent = 'Sentence Builder';
-    sentenceHeader.style.fontWeight = '600';
-    sentenceHeader.style.fontSize = CONFIG.typography.footnote; // Smaller font
-    sentenceHeader.style.color = CONFIG.colors.secondaryText;
-    sentenceHeader.style.marginBottom = '4px'; // Reduced margin
+    sentenceHeader.style.display = 'flex';
+    sentenceHeader.style.justifyContent = 'space-between';
+    sentenceHeader.style.alignItems = 'center';
+    sentenceHeader.style.cursor = 'pointer';
+    sentenceHeader.style.marginBottom = '8px';
+    
+    const sentenceTitle = document.createElement('span');
+    sentenceTitle.textContent = 'Sentence Builder';
+    sentenceTitle.style.fontWeight = '600';
+    sentenceTitle.style.fontSize = CONFIG.typography.footnote; // Smaller font
+    sentenceTitle.style.color = CONFIG.colors.secondaryText;
+    
+    const sentenceToggleBtn = document.createElement('span');
+    sentenceToggleBtn.innerHTML = '▼';
+    sentenceToggleBtn.style.fontSize = '12px';
+    sentenceToggleBtn.style.color = CONFIG.colors.secondaryText;
+    sentenceToggleBtn.style.transition = 'transform 0.3s ease';
+    
+    sentenceHeader.appendChild(sentenceTitle);
+    sentenceHeader.appendChild(sentenceToggleBtn);
     sentenceCard.appendChild(sentenceHeader);
+    
+    const sentenceCollapseBody = document.createElement('div');
+    sentenceCollapseBody.style.transition = 'max-height 0.3s ease-out, opacity 0.2s ease-out';
+    sentenceCollapseBody.style.maxHeight = '300px';
+    sentenceCollapseBody.style.opacity = '1';
+    sentenceCollapseBody.style.overflow = 'hidden';
     
     const currentSentenceContainer = document.createElement('div');
     currentSentenceContainer.style.marginBottom = CONFIG.spacing.small; // Reduced margin
@@ -368,14 +458,14 @@ function setupUI() {
     currentSentenceEl.style.overflowY = 'auto'; // Add scrolling if needed
     currentSentenceContainer.appendChild(currentSentenceEl);
     
-    sentenceCard.appendChild(currentSentenceContainer);
+    sentenceCollapseBody.appendChild(currentSentenceContainer);
     
     // Separator with reduced margin
     const separator = document.createElement('div');
     separator.style.height = '1px';
     separator.style.backgroundColor = CONFIG.colors.separator;
     separator.style.margin = `${CONFIG.spacing.small} 0`;
-    sentenceCard.appendChild(separator);
+    sentenceCollapseBody.appendChild(separator);
     
     const historyHeader = document.createElement('div');
     historyHeader.textContent = 'History';
@@ -383,7 +473,7 @@ function setupUI() {
     historyHeader.style.fontSize = CONFIG.typography.footnote; // Smaller font
     historyHeader.style.color = CONFIG.colors.secondaryText;
     historyHeader.style.marginBottom = '4px'; // Reduced margin
-    sentenceCard.appendChild(historyHeader);
+    sentenceCollapseBody.appendChild(historyHeader);
     
     const historyContainer = document.createElement('div');
     historyContainer.id = 'sentence-history';
@@ -392,7 +482,23 @@ function setupUI() {
     historyContainer.style.gap = CONFIG.spacing.small; // Reduced gap
     historyContainer.style.maxHeight = '180px'; // Add max height
     historyContainer.style.overflowY = 'auto'; // Add scrolling if needed
-    sentenceCard.appendChild(historyContainer);
+    sentenceCollapseBody.appendChild(historyContainer);
+    
+    sentenceCard.appendChild(sentenceCollapseBody);
+    
+    let isSentenceCollapsed = false;
+    sentenceHeader.addEventListener('click', () => {
+        isSentenceCollapsed = !isSentenceCollapsed;
+        if (isSentenceCollapsed) {
+            sentenceCollapseBody.style.maxHeight = '0px';
+            sentenceCollapseBody.style.opacity = '0';
+            sentenceToggleBtn.style.transform = 'rotate(-90deg)';
+        } else {
+            sentenceCollapseBody.style.maxHeight = '300px';
+            sentenceCollapseBody.style.opacity = '1';
+            sentenceToggleBtn.style.transform = 'rotate(0deg)';
+        }
+    });
     
     rightPanel.appendChild(sentenceCard);
         // Add sensor data visualization
@@ -409,34 +515,23 @@ function setupUI() {
     });
 
 
-    watch.addEventListener('connected', () => {
-        connectButton.textContent = 'Connected';
-        connectButton.style.backgroundColor = CONFIG.colors.secondary;
-        connectButton.addEventListener('mouseover', () => {
-            connectButton.style.backgroundColor = CONFIG.colors.secondaryDark;
-        });
-        updateBLEStatus(true);
-        updateSignalStrength(-50);
-    });
-
-    watch.addEventListener('disconnected', () => {
-        connectButton.textContent = 'Connect';
-        connectButton.style.backgroundColor = CONFIG.colors.primary;
-        connectButton.addEventListener('mouseover', () => {
-            connectButton.style.backgroundColor = CONFIG.colors.primaryDark;
-        });
-        updateBLEStatus(false);
-        updateSignalStrength(-100);
-    });
-
-    watch.addEventListener('scanning', () => {
-        connectButton.textContent = 'Scanning...';
-        connectButton.style.backgroundColor = CONFIG.colors.primary;
-        connectButton.addEventListener('mouseover', () => {
-            connectButton.style.backgroundColor = CONFIG.colors.primaryDark;
-        });
-        updateBLEStatus(false, true);
-    });
+    // Poll connection state to sync UI dynamically
+    setInterval(() => {
+        const isConnected = (watch.device && watch.device.gatt && watch.device.gatt.connected) || watch.connected || false;
+        if (isConnected !== bleState.isConnected) {
+            updateBLEStatus(isConnected);
+            if (isConnected) {
+                disconnectButton.style.display = 'block';
+                connectButton.style.display = 'none';
+                updateSignalStrength(-50);
+            } else {
+                disconnectButton.style.display = 'none';
+                connectButton.style.display = 'block';
+                connectButton.textContent = 'Connect';
+                updateSignalStrength(-100);
+            }
+        }
+    }, 500);
 }
 
 // Set up Three.js scene
@@ -940,6 +1035,29 @@ function updateBLEStatus(isConnected, isScanning = false) {
         statusLabel = 'Disconnected';
         state = 'disconnected';
         bleState.connectionQuality = 'disconnected';
+        
+        // Reset BLE State metrics
+        bleState.packetCount = 0;
+        bleState.dataRate = 0;
+        bleState.latency = 0;
+        bleState.packetLoss = 0;
+        bleState.uptime = 0;
+        bleState.lastPacketTime = 0;
+        
+        animateMetric('packet-count', 0, 'pkts');
+        animateMetric('data-rate', 0, 'B/s');
+        animateMetric('latency', 0, 'ms');
+        animateMetric('packet-loss', 0, '%');
+        
+        const uptimeEl = document.getElementById('uptime');
+        if (uptimeEl) uptimeEl.textContent = '00:00:00';
+        
+        // Reset sensor data to stop processing
+        appState.sensorData.acceleration = [0, 0, 0];
+        appState.sensorData.gravity = [0, 0, 0];
+        appState.sensorData.angularVelocity = [0, 0, 0];
+        appState.sensorData.orientation = [0, 0, 0, 0];
+        appState.sensorDataBuffer = [];
     }
     statusDot.style.backgroundColor = statusColor;
     statusText.textContent = statusLabel;
@@ -1212,6 +1330,7 @@ function createSensorDataVisualization() {
     container.style.marginTop = CONFIG.spacing.medium;
     container.style.border = '1px solid rgba(0,0,0,0.1)';
     container.style.overflow = 'hidden';
+    container.style.flex = 'none';
 
     // Header
     const header = document.createElement('div');
@@ -1219,6 +1338,11 @@ function createSensorDataVisualization() {
     header.style.justifyContent = 'space-between';
     header.style.alignItems = 'center';
     header.style.marginBottom = CONFIG.spacing.medium;
+    header.style.cursor = 'pointer';
+    
+    const titleWrapper = document.createElement('div');
+    titleWrapper.style.display = 'flex';
+    titleWrapper.style.alignItems = 'center';
     
     const title = document.createElement('h3');
     title.textContent = 'Real-time Sensor Data';
@@ -1227,15 +1351,32 @@ function createSensorDataVisualization() {
     title.style.fontWeight = '600';
     title.style.color = CONFIG.colors.text;
     
+    const toggleBtn = document.createElement('span');
+    toggleBtn.innerHTML = '▼';
+    toggleBtn.style.fontSize = '12px';
+    toggleBtn.style.color = CONFIG.colors.secondaryText;
+    toggleBtn.style.transition = 'transform 0.3s ease';
+    toggleBtn.style.marginLeft = '8px';
+    
+    titleWrapper.appendChild(title);
+    titleWrapper.appendChild(toggleBtn);
+    
     const bufferInfo = document.createElement('div');
     bufferInfo.id = 'buffer-info';
     bufferInfo.style.fontSize = CONFIG.typography.footnote;
     bufferInfo.style.color = CONFIG.colors.secondaryText;
     bufferInfo.textContent = `Buffer: 0/100`;
     
-    header.appendChild(title);
+    header.appendChild(titleWrapper);
     header.appendChild(bufferInfo);
     container.appendChild(header);
+
+    // Collapsible content wrapper
+    const collapseBody = document.createElement('div');
+    collapseBody.style.transition = 'max-height 0.3s ease-out, opacity 0.2s ease-out';
+    collapseBody.style.maxHeight = '300px';
+    collapseBody.style.opacity = '1';
+    collapseBody.style.overflow = 'hidden';
 
     // Create visualization canvas
     const canvasContainer = document.createElement('div');
@@ -1251,7 +1392,7 @@ function createSensorDataVisualization() {
     canvas.style.backgroundColor = CONFIG.colors.systemFill;
     
     canvasContainer.appendChild(canvas);
-    container.appendChild(canvasContainer);
+    collapseBody.appendChild(canvasContainer);
 
     // Create legend
     const legend = document.createElement('div');
@@ -1288,7 +1429,22 @@ function createSensorDataVisualization() {
         legend.appendChild(legendItem);
     });
     
-    container.appendChild(legend);
+    collapseBody.appendChild(legend);
+    container.appendChild(collapseBody);
+
+    let isCollapsed = false;
+    header.addEventListener('click', () => {
+        isCollapsed = !isCollapsed;
+        if (isCollapsed) {
+            collapseBody.style.maxHeight = '0px';
+            collapseBody.style.opacity = '0';
+            toggleBtn.style.transform = 'rotate(-90deg)';
+        } else {
+            collapseBody.style.maxHeight = '300px';
+            collapseBody.style.opacity = '1';
+            toggleBtn.style.transform = 'rotate(0deg)';
+        }
+    });
 
     // Initialize canvas context and animation
     const ctx = canvas.getContext('2d');
@@ -1303,6 +1459,9 @@ function createSensorDataVisualization() {
     }
     
     function drawSensorData(timestamp) {
+        if (canvas.width === 0 || canvas.height === 0) {
+            resizeCanvas();
+        }
         if (!lastTimestamp) lastTimestamp = timestamp;
         const deltaTime = timestamp - lastTimestamp;
         lastTimestamp = timestamp;

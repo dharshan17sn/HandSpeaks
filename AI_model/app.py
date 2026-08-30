@@ -25,11 +25,17 @@ from sklearn.metrics import confusion_matrix, precision_recall_fscore_support
 # Load environment variables
 load_dotenv()
 HF_API_TOKEN = os.getenv("HF_API_TOKEN")
-GEMINI_API_KEY = "AIzaSyCOk7MFwGHQHY8u6uCqD5wX684p-WB7F9w"
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyCOk7MFwGHQHY8u6uCqD5wX684p-WB7F9w")
+
+# Setup dynamic paths relative to this script
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(BASE_DIR, 'model.h5')
+LABELS_PATH = os.path.join(BASE_DIR, 'unique_labels.npy')
+SENSOR_CSV_PATH = os.path.join(BASE_DIR, 'sensor.csv')
 
 # Load the pre-trained gesture model (trained on 9 features per frame)
-model = load_model('model.h5')
-unique_labels = np.load('unique_labels.npy', allow_pickle=True)
+model = load_model(MODEL_PATH)
+unique_labels = np.load(LABELS_PATH, allow_pickle=True)
 
 # Constants
 SEQUENCE_LENGTH = 100  # Length of sequences for prediction
@@ -202,12 +208,14 @@ def enhance_text():
         result = text_enhancer.enhance_text(text, tone)
         
         if result.get("error"):
+            # Fallback gracefully by returning original text, avoiding a 500 crash in UI
             return jsonify({
-                "error": result["error"],
-                "original_text": text,
+                "original": text,
+                "tone_adjusted": text,
                 "grammar_corrected": text,
-                "tone_adjusted": text
-            }), 500
+                "success": True,
+                "api_error": result["error"]
+            })
             
         return jsonify({
             "original": result["original"],
@@ -216,17 +224,20 @@ def enhance_text():
             "success": True
         })
     except Exception as e:
+        # Fallback gracefully on exception
         return jsonify({
-            "error": f"Text enhancement failed: {str(e)}",
+            "original": text,
+            "tone_adjusted": text,
             "grammar_corrected": text,
-            "tone_adjusted": text
-        }), 500
+            "success": True,
+            "exception_error": str(e)
+        })
 
 @app.route('/row-count', methods=['GET'])
 def get_row_count():
     """Get the number of rows in the sensor.csv file"""
     try:
-        with open('AI_model\sensor.csv', 'r') as file:
+        with open(SENSOR_CSV_PATH, 'r') as file:
             # Subtract 1 to exclude the header row
             row_count = sum(1 for _ in file) - 1
             return jsonify({"row_count": row_count})
@@ -245,7 +256,7 @@ def save_csv():
         if not rows:
             return jsonify({"error": "No data provided"}), 400
 
-        filename = 'D:/projects/Hand-Speaks/AI_model/sensor.csv'
+        filename = SENSOR_CSV_PATH
             
         # Append the data
         with open(filename, mode='a', newline='') as csvfile:
@@ -279,7 +290,7 @@ def delete_rows():
             
         # Read all rows
         rows = []
-        with open('D:/projects/Hand-Speaks/AI_model/sensor.csv', 'r') as file:
+        with open(SENSOR_CSV_PATH, 'r') as file:
             reader = csv.reader(file)
             header = next(reader)  # Get header
             
@@ -294,12 +305,12 @@ def delete_rows():
         
         # Calculate how many rows were deleted
         deleted_count = 0
-        with open('D:/projects/Hand-Speaks/AI_model/sensor.csv', 'r') as file:
+        with open(SENSOR_CSV_PATH, 'r') as file:
             total_rows = sum(1 for _ in file) - 1  # -1 for header
             deleted_count = total_rows - len(rows)
         
         # Write back all rows except those matching the delete criteria
-        with open('D:/projects/Hand-Speaks/AI_model/sensor.csv', 'w', newline='') as file:
+        with open(SENSOR_CSV_PATH, 'w', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(header)
             writer.writerows(rows)
@@ -324,7 +335,7 @@ def train_model():
         learning_rate = float(params.get('learning_rate', 0.001))
 
         # Load dataset
-        data = pd.read_csv('sensor.csv')
+        data = pd.read_csv(SENSOR_CSV_PATH)
 
         feature_columns = [
             'Acceleration_x', 'Acceleration_y', 'Acceleration_z',
@@ -401,8 +412,8 @@ def train_model():
             }
 
         # Save model and labels
-        model.save('model.h5')
-        np.save('unique_labels.npy', unique_labels)
+        model.save(MODEL_PATH)
+        np.save(LABELS_PATH, unique_labels)
 
         # Compose response
         metrics = {
