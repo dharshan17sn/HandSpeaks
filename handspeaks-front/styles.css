@@ -716,21 +716,38 @@ ion-icon {
     display: flex;
     justify-content: center;
     align-items: center;
-    background-color: #00000066;
     overflow: hidden;
+    background: #050d1a;
 }
 
-#bg-video {
+.hero-bg {
+    position: absolute;
+    inset: 0;
+    background-image: url('hero-bg.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    z-index: 0;
+    /* Dark overlay so navbar + text always readable */
+    filter: brightness(0.6);
+}
+
+/* Dark gradient at top so header nav is always readable */
+.hero::before {
+    content: '';
     position: absolute;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    z-index: -1;
+    right: 0;
+    height: 180px;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.65) 0%, transparent 100%);
+    z-index: 1;
+    pointer-events: none;
 }
 
 .hero-content {
+    position: relative;
+    z-index: 2;
     text-align: center;
     color: white;
     max-width: 80%;
@@ -743,18 +760,19 @@ ion-icon {
     margin-bottom: 20px;
     opacity: 0;
     animation: fadeIn 3s ease-in-out forwards;
+    text-shadow: 0 2px 20px rgba(0,0,0,0.5);
 }
 
 .dynamic-text:nth-child(1) {
-    animation-delay: 1s;
+    animation-delay: 0.3s;
 }
 
 .dynamic-text:nth-child(2) {
-    animation-delay: 4s;
+    animation-delay: 0.8s;
 }
 
 .dynamic-text:nth-child(3) {
-    animation-delay: 7s;
+    animation-delay: 1.3s;
 }
 
 body {
@@ -1867,8 +1885,8 @@ body#index-page header .search-button {
 }
 /* Landing page: top of video — white glass pill so it reads over dark video */
 body#index-page header:not(.scrolled) .navigation li a {
-    color: rgba(255, 255, 255, 0.8) !important;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    color: #ffffff !important;
+    text-shadow: 0 1px 8px rgba(0,0,0,0.7) !important;
 }
 
 body#index-page header:not(.scrolled) .navigation li a:hover {
@@ -1894,24 +1912,10 @@ body#index-page header.scrolled .navigation li a:hover {
 }
 
 body#index-page header.scrolled .navigation li a.active {
-    background: rgba(255, 107, 0, 0.08) !important;
+    background: rgba(255, 107, 0, 0.09) !important;
     color: #FF6B00 !important;
     border: none !important;
     font-weight: 600;
-}
-
-/* Scrolled Header style for index page */
-body#index-page header.scrolled {
-    background: rgba(255, 255, 255, 0.85) !important;
-    backdrop-filter: blur(20px) saturate(180%) !important;
-    -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
-    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.08) !important;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.05) !important;
-}
-
-body#index-page header.scrolled #logo {
-    color: #1d1d1f !important;
-    text-shadow: none !important;
 }
 
 body#index-page header.scrolled .search-button {
@@ -1919,9 +1923,23 @@ body#index-page header.scrolled .search-button {
     text-shadow: none !important;
 }
 
-/* Dark mode overrides for scrolled header */
+/* Scrolled: frosted glass header */
+body#index-page header.scrolled {
+    background: rgba(255, 255, 255, 0.88) !important;
+    backdrop-filter: blur(24px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08) !important;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
+}
+
+body#index-page header.scrolled #logo {
+    color: #1d1d1f !important;
+    text-shadow: none !important;
+}
+
+/* ── Dark mode scrolled ── */
 body.dark-theme#index-page header.scrolled {
-    background: rgba(28, 28, 30, 0.85) !important;
+    background: rgba(18, 18, 20, 0.88) !important;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
 }
 
@@ -1931,18 +1949,18 @@ body.dark-theme#index-page header.scrolled #logo {
 }
 
 body.dark-theme#index-page header.scrolled .navigation li a {
-    color: rgba(255, 255, 255, 0.7) !important;
+    color: rgba(255, 255, 255, 0.75) !important;
     text-shadow: none !important;
 }
 
 body.dark-theme#index-page header.scrolled .navigation li a:hover {
-    background: rgba(255, 255, 255, 0.06) !important;
+    background: rgba(255, 255, 255, 0.07) !important;
     color: #ffffff !important;
 }
 
 body.dark-theme#index-page header.scrolled .navigation li a.active {
     background: rgba(255, 107, 0, 0.15) !important;
-    color: #FF822E !important;
+    color: #FF8C42 !important;
 }
 
 body.dark-theme#index-page header.scrolled .search-button {
