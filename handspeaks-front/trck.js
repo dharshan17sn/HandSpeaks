@@ -601,15 +601,15 @@ function setupEventListeners() {
     });
 }
 
-// Check if sensor data is valid
+// Check if sensor data is valid (only check the 9 features sent to model)
 function isSensorDataValid() {
     const allValues = [
         ...appState.sensorData.acceleration,
         ...appState.sensorData.gravity,
-        ...appState.sensorData.angularVelocity,
-        ...appState.sensorData.orientation
+        ...appState.sensorData.angularVelocity
     ];
-    return allValues.every(v => v !== 0);
+    // At least some values must be non-zero (allow orientation to lag)
+    return allValues.some(v => v !== 0);
 }
 
 // Update hand model rotation based on sensor data
@@ -690,26 +690,36 @@ async function sendDataToFlask(dataToSend) {
         });
 
         const data = await response.json();
+        if (!response.ok) {
+            // Show server error details so we can debug
+            const errMsg = data.error || `Server error ${response.status}`;
+            console.error('Predict error:', data);
+            document.getElementById('prediction').textContent = `⚠️ ${errMsg}`;
+            return;
+        }
         if (data.prediction) {
-            handlePrediction(data.prediction);
+            handlePrediction(data.prediction, data.confidence || 1);
         }
     } catch (error) {
-        console.error('Prediction error:', error);
-        document.getElementById('prediction').textContent = 'Error getting prediction';
+        console.error('Prediction fetch error:', error);
+        document.getElementById('prediction').textContent = '⚠️ Cannot reach server';
     }
 }
 
 // Handle prediction results
-function handlePrediction(prediction) {
+function handlePrediction(prediction, confidence) {
     clearTimeout(appState.inactivityTimer);
-    document.getElementById('prediction').textContent = prediction;
 
-    if (prediction === "No gesture") {
+    // Normalize label name for comparison (trim whitespace)
+    const label = String(prediction).trim();
+    document.getElementById('prediction').textContent = label;
+
+    if (label === 'No gesture') {
         appState.inactivityTimer = setTimeout(finalizeSentence, CONFIG.inactivityTimeout);
     } else {
-        appState.currentSentence.push(prediction);
+        appState.currentSentence.push(label);
         updateSentenceDisplay();
-        speak(prediction);
+        speak(label);
     }
 }
 
