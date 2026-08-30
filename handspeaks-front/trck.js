@@ -623,30 +623,29 @@ function updateHandModel(model) {
 function startDataCollection() {
     setInterval(() => {
         if (!appState.isCollectingData || !isSensorDataValid()) return;
-        
-        // Animate data packet with enhanced visualization
+
+        // Animate data packet (safely — guard against missing DOM elements)
         const dataFlowContainer = document.getElementById('data-flow-container');
         if (dataFlowContainer) {
             animateDataPacket(dataFlowContainer);
-            
-            // Animate device icons
+
             const watchIcon = dataFlowContainer.querySelector('div:nth-child(2) > div:nth-child(1) > div:nth-child(1)');
             const frontendIcon = dataFlowContainer.querySelector('div:nth-child(2) > div:nth-child(3) > div:nth-child(1)');
-            
-            watchIcon.style.transform = 'scale(1.1)';
-            frontendIcon.style.transform = 'scale(1.1)';
-            
+
+            if (watchIcon) watchIcon.style.transform = 'scale(1.1)';
+            if (frontendIcon) frontendIcon.style.transform = 'scale(1.1)';
+
             setTimeout(() => {
-                watchIcon.style.transform = 'scale(1)';
-                frontendIcon.style.transform = 'scale(1)';
+                if (watchIcon) watchIcon.style.transform = 'scale(1)';
+                if (frontendIcon) frontendIcon.style.transform = 'scale(1)';
             }, 200);
         }
-        
+
         if (appState.sensorDataBuffer.length === 0) {
             appState.startTime = Date.now();
         }
-        
-        // Store all sensor data including orientation (for visualization)
+
+        // Store sensor data (accel + gravity + angularVelocity + orientation for viz)
         appState.sensorDataBuffer.push([
             ...appState.sensorData.acceleration,
             ...appState.sensorData.gravity,
