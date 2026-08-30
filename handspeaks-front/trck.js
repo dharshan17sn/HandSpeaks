@@ -622,19 +622,28 @@ function updateHandModel(model) {
 // Start collecting sensor data
 function startDataCollection() {
     setInterval(() => {
-        if (!appState.isCollectingData || !isSensorDataValid()) return;
+        const predEl = document.getElementById('prediction');
+
+        // Show why we're not collecting
+        if (!appState.isCollectingData) {
+            if (predEl && predEl.textContent === 'Waiting for gesture...') {
+                predEl.textContent = '⏳ Processing...';
+            }
+            return;
+        }
+        if (!isSensorDataValid()) {
+            if (predEl) predEl.textContent = '📡 Waiting for sensor data...';
+            return;
+        }
 
         // Animate data packet (safely — guard against missing DOM elements)
         const dataFlowContainer = document.getElementById('data-flow-container');
         if (dataFlowContainer) {
             animateDataPacket(dataFlowContainer);
-
             const watchIcon = dataFlowContainer.querySelector('div:nth-child(2) > div:nth-child(1) > div:nth-child(1)');
             const frontendIcon = dataFlowContainer.querySelector('div:nth-child(2) > div:nth-child(3) > div:nth-child(1)');
-
             if (watchIcon) watchIcon.style.transform = 'scale(1.1)';
             if (frontendIcon) frontendIcon.style.transform = 'scale(1.1)';
-
             setTimeout(() => {
                 if (watchIcon) watchIcon.style.transform = 'scale(1)';
                 if (frontendIcon) frontendIcon.style.transform = 'scale(1)';
@@ -645,7 +654,7 @@ function startDataCollection() {
             appState.startTime = Date.now();
         }
 
-        // Store sensor data (accel + gravity + angularVelocity + orientation for viz)
+        // Store sensor data
         appState.sensorDataBuffer.push([
             ...appState.sensorData.acceleration,
             ...appState.sensorData.gravity,
@@ -653,7 +662,13 @@ function startDataCollection() {
             ...appState.sensorData.orientation.slice(0, 3)
         ]);
 
+        // Show live buffer progress
+        if (predEl) {
+            predEl.textContent = `🔄 Collecting ${appState.sensorDataBuffer.length}/${CONFIG.sequenceLength}`;
+        }
+
         if (appState.sensorDataBuffer.length >= CONFIG.sequenceLength) {
+            if (predEl) predEl.textContent = '📤 Sending to server...';
             processDataBuffer();
         }
     }, 20);
