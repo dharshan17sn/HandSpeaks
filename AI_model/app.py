@@ -33,14 +33,24 @@ MODEL_PATH = os.path.join(BASE_DIR, 'model.h5')
 LABELS_PATH = os.path.join(BASE_DIR, 'unique_labels.npy')
 SENSOR_CSV_PATH = os.path.join(BASE_DIR, 'sensor.csv')
 
-# Load the pre-trained gesture model (trained on 9 features per frame)
 try:
-    model = load_model(MODEL_PATH, compile=False)
     unique_labels = np.load(LABELS_PATH, allow_pickle=True)
-    print(f'[INFO] Model loaded from {MODEL_PATH}')
+    try:
+        model = load_model(MODEL_PATH, compile=False)
+        print(f'[INFO] Model loaded successfully using load_model')
+    except Exception as inner_e:
+        print(f'[WARNING] load_model failed ({inner_e}). Constructing model manually and loading weights...')
+        model = Sequential()
+        model.add(LSTM(64, return_sequences=True, input_shape=(100, 9)))
+        model.add(Dropout(0.2))
+        model.add(LSTM(64))
+        model.add(Dropout(0.2))
+        model.add(Dense(len(unique_labels), activation='softmax'))
+        model.load_weights(MODEL_PATH)
+        print(f'[INFO] Model weights loaded successfully manually!')
     print(f'[INFO] Labels: {unique_labels}')
 except Exception as e:
-    print(f'[ERROR] Failed to load model: {e}')
+    print(f'[ERROR] Failed to load model or labels: {e}')
     model = None
     unique_labels = []
 

@@ -10,7 +10,7 @@ let recordedDataCount = 0;
 
 // Configuration
 const CONFIG = {
-    modelPath: '../3dmodel/arm.glb',
+    modelPath: '3dmodel/arm.glb',
     recordingDuration: 3000, // 3 seconds in milliseconds
     colors: {
         primary: '#007AFF',

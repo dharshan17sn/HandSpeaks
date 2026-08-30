@@ -8,7 +8,7 @@ const mainContent = document.createElement('main');
 const CONFIG = {
     sequenceLength: 100,
     inactivityTimeout: 3000,
-    modelPath: '../3dmodel/arm.glb',
+    modelPath: '3dmodel/arm.glb',
     apiEndpoint: (typeof BACKEND_URL !== 'undefined') ? BACKEND_URL : 'http://127.0.0.1:5000',
     colors: {
         primary: '#007AFF',       // Apple Blue
