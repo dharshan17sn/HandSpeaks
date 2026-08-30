@@ -35,7 +35,7 @@ SENSOR_CSV_PATH = os.path.join(BASE_DIR, 'sensor.csv')
 
 # Load the pre-trained gesture model (trained on 9 features per frame)
 try:
-    model = load_model(MODEL_PATH)
+    model = load_model(MODEL_PATH, compile=False)
     unique_labels = np.load(LABELS_PATH, allow_pickle=True)
     print(f'[INFO] Model loaded from {MODEL_PATH}')
     print(f'[INFO] Labels: {unique_labels}')
